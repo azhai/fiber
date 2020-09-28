@@ -31,7 +31,7 @@ import (
 )
 
 // Version of current fiber package
-const Version = "2.0.1"
+const Version = "2.0.3"
 
 // Map is a shortcut for map[string]interface{}, useful for JSON returns
 type Map map[string]interface{}
@@ -326,6 +326,20 @@ func New(config ...Config) *App {
 	return app
 }
 
+// Mount attaches another app instance as a subrouter along a routing path.
+// It's very useful to split up a large API as many independent routers and
+// compose them as a single service using Mount.
+func (app *App) Mount(prefix string, fiber *App) Router {
+	stack := fiber.Stack()
+	for m := range stack {
+		for r := range stack[m] {
+			route := app.copyRoute(stack[m][r])
+			app.addRoute(route.Method, app.addPrefixToRoute(prefix, route))
+		}
+	}
+	return app
+}
+
 // Use registers a middleware route that will match requests
 // with the provided prefix (which is optional and defaults to "/").
 //
@@ -350,16 +364,6 @@ func (app *App) Use(args ...interface{}) Router {
 			prefix = arg
 		case Handler:
 			handlers = append(handlers, arg)
-		// TODO: v2.1.0
-		// case *App:
-		// 	stack := arg.Stack()
-		// 	for m := range stack {
-		// 		for r := range stack[m] {
-		// 			route := app.copyRoute(stack[m][r])
-		// 			app.addRoute(route.Method, app.addPrefixToRoute(prefix, route))
-		// 		}
-		// 	}
-		// 	return app
 		default:
 			panic(fmt.Sprintf("use: invalid handler %v\n", reflect.TypeOf(arg)))
 		}
@@ -534,6 +538,11 @@ func (app *App) Shutdown() error {
 		return fmt.Errorf("shutdown: server is not running")
 	}
 	return app.server.Shutdown()
+}
+
+// Server returns the underlying fasthttp server
+func (app *App) Server() *fasthttp.Server {
+	return app.server
 }
 
 // Test is used for internal debugging by passing a *http.Request.

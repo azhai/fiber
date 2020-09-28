@@ -180,6 +180,60 @@ func Test_App_ErrorHandler_Custom(t *testing.T) {
 	utils.AssertEqual(t, "hi, i'm an custom error", string(body))
 }
 
+func Test_App_ErrorHandler_HandlerStack(t *testing.T) {
+	app := New(Config{
+		ErrorHandler: func(c *Ctx, err error) error {
+			utils.AssertEqual(t, "1: USE error", err.Error())
+			return DefaultErrorHandler(c, err)
+		},
+	})
+	app.Use("/", func(c *Ctx) error {
+		err := c.Next() // call next USE
+		utils.AssertEqual(t, "2: USE error", err.Error())
+		return errors.New("1: USE error")
+	}, func(c *Ctx) error {
+		err := c.Next() // call [0] GET
+		utils.AssertEqual(t, "0: GET error", err.Error())
+		return errors.New("2: USE error")
+	})
+	app.Get("/", func(c *Ctx) error {
+		return errors.New("0: GET error")
+	})
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	utils.AssertEqual(t, nil, err, "app.Test(req)")
+	utils.AssertEqual(t, 500, resp.StatusCode, "Status code")
+
+	body, err := ioutil.ReadAll(resp.Body)
+	utils.AssertEqual(t, nil, err)
+	utils.AssertEqual(t, "1: USE error", string(body))
+}
+
+func Test_App_ErrorHandler_RouteStack(t *testing.T) {
+	app := New(Config{
+		ErrorHandler: func(c *Ctx, err error) error {
+			utils.AssertEqual(t, "1: USE error", err.Error())
+			return DefaultErrorHandler(c, err)
+		},
+	})
+	app.Use("/", func(c *Ctx) error {
+		err := c.Next()
+		utils.AssertEqual(t, "0: GET error", err.Error())
+		return errors.New("1: USE error") // [2] call ErrorHandler
+	})
+	app.Get("/test", func(c *Ctx) error {
+		return errors.New("0: GET error") // [1] return to USE
+	})
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/test", nil))
+	utils.AssertEqual(t, nil, err, "app.Test(req)")
+	utils.AssertEqual(t, 500, resp.StatusCode, "Status code")
+
+	body, err := ioutil.ReadAll(resp.Body)
+	utils.AssertEqual(t, nil, err)
+	utils.AssertEqual(t, "1: USE error", string(body))
+}
+
 func Test_App_Nested_Params(t *testing.T) {
 	app := New()
 
@@ -203,19 +257,20 @@ func Test_App_Nested_Params(t *testing.T) {
 	utils.AssertEqual(t, 200, resp.StatusCode, "Status code")
 }
 
-// func Test_App_Use_App(t *testing.T) {
-// 	micro := New()
-// 	micro.Get("/doe", func(c *Ctx) error {
-// 		return c.SendStatus(StatusOK)
-// 	})
+// go test -run Test_App_Mount
+func Test_App_Mount(t *testing.T) {
+	micro := New()
+	micro.Get("/doe", func(c *Ctx) error {
+		return c.SendStatus(StatusOK)
+	})
 
-// 	app := New()
-// 	app.Use("/john", micro)
+	app := New()
+	app.Mount("/john", micro)
 
-// 	resp, err := app.Test(httptest.NewRequest("GET", "/john/doe", nil))
-// 	utils.AssertEqual(t, nil, err, "app.Test(req)")
-// 	utils.AssertEqual(t, 200, resp.StatusCode, "Status code")
-// }
+	resp, err := app.Test(httptest.NewRequest("GET", "/john/doe", nil))
+	utils.AssertEqual(t, nil, err, "app.Test(req)")
+	utils.AssertEqual(t, 200, resp.StatusCode, "Status code")
+}
 
 func Test_App_Use_Params(t *testing.T) {
 	app := New()
@@ -612,6 +667,18 @@ func Test_App_Static_Prefix(t *testing.T) {
 	resp, err = app.Test(req)
 	utils.AssertEqual(t, nil, err, "app.Test(req)")
 	utils.AssertEqual(t, 200, resp.StatusCode, "Status code")
+	utils.AssertEqual(t, false, resp.Header.Get("Content-Length") == "")
+	utils.AssertEqual(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
+}
+
+func Test_App_Static_Trailing_Slash(t *testing.T) {
+	app := New()
+	app.Static("/john", "./.github")
+
+	req := httptest.NewRequest("GET", "/john/", nil)
+	resp, err := app.Test(req)
+	utils.AssertEqual(t, nil, err, "app.Test(req)")
+	utils.AssertEqual(t, 404, resp.StatusCode, "Status code")
 	utils.AssertEqual(t, false, resp.Header.Get("Content-Length") == "")
 	utils.AssertEqual(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
 }

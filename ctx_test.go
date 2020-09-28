@@ -1891,7 +1891,7 @@ func Benchmark_Ctx_SendString_B(b *testing.B) {
 	utils.AssertEqual(b, []byte("Hello, world!"), c.Response().Body())
 }
 
-// go test -run Benchmark_Ctx_QueryParser
+// go test -run Test_Ctx_QueryParser -v
 func Test_Ctx_QueryParser(t *testing.T) {
 	t.Parallel()
 	app := New()
@@ -1909,10 +1909,32 @@ func Test_Ctx_QueryParser(t *testing.T) {
 	utils.AssertEqual(t, nil, c.QueryParser(q))
 	utils.AssertEqual(t, 2, len(q.Hobby))
 
+	c.Request().URI().SetQueryString("id=1&name=tom&hobby=basketball,football")
+	q = new(Query)
+	utils.AssertEqual(t, nil, c.QueryParser(q))
+	utils.AssertEqual(t, 2, len(q.Hobby))
+
+	c.Request().URI().SetQueryString("id=1&name=tom&hobby=scoccer&hobby=basketball,football")
+	q = new(Query)
+	utils.AssertEqual(t, nil, c.QueryParser(q))
+	utils.AssertEqual(t, 3, len(q.Hobby))
+
 	empty := new(Query)
 	c.Request().URI().SetQueryString("")
 	utils.AssertEqual(t, nil, c.QueryParser(empty))
 	utils.AssertEqual(t, 0, len(empty.Hobby))
+
+	type Query2 struct {
+		ID    int
+		Name  string
+		Hobby string
+	}
+
+	c.Request().URI().SetQueryString("id=1&name=tom&hobby=basketball,football")
+	q2 := new(Query2)
+	utils.AssertEqual(t, nil, c.QueryParser(q2))
+	utils.AssertEqual(t, "basketball,football", q2.Hobby)
+
 }
 
 // go test -v  -run=^$ -bench=Benchmark_Ctx_QueryParser -benchmem -count=4
@@ -1935,4 +1957,76 @@ func Benchmark_Ctx_QueryParser(b *testing.B) {
 		c.QueryParser(q)
 	}
 	utils.AssertEqual(b, nil, c.QueryParser(q))
+}
+
+// go test -v  -run=^$ -bench=Benchmark_Ctx_QueryParser_Comma -benchmem -count=4
+func Benchmark_Ctx_QueryParser_Comma(b *testing.B) {
+	app := New()
+	c := app.AcquireCtx(&fasthttp.RequestCtx{})
+	defer app.ReleaseCtx(c)
+	type Query struct {
+		ID    int
+		Name  string
+		Hobby []string
+	}
+	c.Request().SetBody([]byte(``))
+	c.Request().Header.SetContentType("")
+	// c.Request().URI().SetQueryString("id=1&name=tom&hobby=basketball&hobby=football")
+	c.Request().URI().SetQueryString("id=1&name=tom&hobby=basketball,football")
+	q := new(Query)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		c.QueryParser(q)
+	}
+	utils.AssertEqual(b, nil, c.QueryParser(q))
+}
+
+// go test -run Test_Ctx_BodyStreamWriter
+func Test_Ctx_BodyStreamWriter(t *testing.T) {
+	t.Parallel()
+
+	ctx := &fasthttp.RequestCtx{}
+
+	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
+		fmt.Fprintf(w, "body writer line 1\n")
+		if err := w.Flush(); err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+		fmt.Fprintf(w, "body writer line 2\n")
+	})
+	if !ctx.IsBodyStream() {
+		t.Fatal("IsBodyStream must return true")
+	}
+
+	s := ctx.Response.String()
+	br := bufio.NewReader(bytes.NewBufferString(s))
+	var resp fasthttp.Response
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Error when reading response: %s", err)
+	}
+	body := string(resp.Body())
+	expectedBody := "body writer line 1\nbody writer line 2\n"
+	if body != expectedBody {
+		t.Fatalf("unexpected body: %q. Expecting %q", body, expectedBody)
+	}
+}
+
+// go test -v  -run=^$ -bench=Benchmark_Ctx_BodyStreamWriter -benchmem -count=4
+func Benchmark_Ctx_BodyStreamWriter(b *testing.B) {
+	ctx := &fasthttp.RequestCtx{}
+	user := []byte(`{"name":"john"}`)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		ctx.ResetBody()
+		ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
+			for i := 0; i < 10; i++ {
+				w.Write(user)
+				if err := w.Flush(); err != nil {
+					return
+				}
+			}
+		})
+	}
 }

@@ -126,7 +126,7 @@ go get github.com/gofiber/fiber/v2
 - [中间件](https://docs.gofiber.io/middleware)和[Next](https://docs.gofiber.io/context#next)支持
 - [快速](https://dev.to/koddr/welcome-to-fiber-an-express-js-styled-fastest-web-framework-written-with-on-golang-497)服务器端编程
 - [模版引擎](https://github.com/gofiber/template)
-- [WebSocket支持](https://docs.gofiber.io/middleware#websocket)
+- [WebSocket支持](https://github.com/gofiber/websocket)
 - [频率限制器](https://docs.gofiber.io/middleware#limiter)
 - [15种语言](https://docs.gofiber.io/)
 - 以及更多请[探索文档](https://docs.gofiber.io/)
@@ -176,7 +176,7 @@ func main() {
 	// GET /api/register
 	app.Get("/api/*", func(c *fiber.Ctx) error {
 		msg := fmt.Sprintf("✋ %s", c.Params("*"))
-		return c.SendString(msg) // => ✋ /api/register
+		return c.SendString(msg) // => ✋ register
 	})
 
 	log.Fatal(app.Listen(":3000"))
@@ -240,7 +240,7 @@ func main() {
 
 ### 模版引擎
 
-📖 [配置](https://docs.gofiber.io/application#settings)
+📖 [配置](https://docs.gofiber.io/fiber#config)
 📖 [模版引擎](https://github.com/gofiber/template)
 📖 [渲染](https://docs.gofiber.io/context#render)
 
@@ -313,7 +313,7 @@ func main() {
 
 ### 日志中间件
 
-📖 [Logger](https://github.com/gofiber/fiber/blob/master/middleware/logger.md)
+📖 [Logger](https://docs.gofiber.io/middleware/logger)
 
 ```go
 package main
@@ -337,7 +337,7 @@ func main() {
 ```
 ### 跨域资源共享(CORS)中间件
 
-📖 [CORS](https://docs.gofiber.io/middleware#cors)
+📖 [CORS](https://docs.gofiber.io/middleware/cors)
 
 ```go
 import (
@@ -394,7 +394,7 @@ func main() {
 
 ### JSON响应
 
-📖 [JSON](https://docs.gofiber.io/context#json)
+📖 [JSON](https://docs.gofiber.io/ctx#json)
 
 ```go
 type User struct {
@@ -424,7 +424,7 @@ func main() {
 
 ### 升级到WebSocket
 
-📖 [Websocket](https://docs.gofiber.io/middleware#websocket)
+📖 [Websocket](https://github.com/gofiber/websocket)
 
 ```go
 import (
@@ -458,7 +458,7 @@ func main() {
 
 ### 恢复(panic)中间件
 
-📖 [Recover](https://github.com/gofiber/fiber/blob/master/middleware/recover.md)
+📖 [Recover](https://docs.gofiber.io/middleware/recover)
 
 ```go
 import (
@@ -488,6 +488,7 @@ Here is a list of middleware that are included within the Fiber framework.
 | :--- | :--- |
 | [basicauth](https://github.com/gofiber/fiber/tree/master/middleware/basicauth) | Basic auth middleware provides an HTTP basic authentication. It calls the next handler for valid credentials and 401 Unauthorized for missing or invalid credentials. |
 | [compress](https://github.com/gofiber/fiber/tree/master/middleware/compress) | Compression middleware for Fiber, it supports `deflate`, `gzip` and `brotli` by default. |
+| [cache](https://github.com/gofiber/fiber/tree/master/middleware/cache) | Intercept and cache responses |
 | [cors](https://github.com/gofiber/fiber/tree/master/middleware/cors) | Enable cross-origin resource sharing \(CORS\) with various options. |
 | [csrf](https://github.com/gofiber/fiber/tree/master/middleware/csrf) | Protect from CSRF exploits. |
 | [filesystem](https://github.com/gofiber/fiber/tree/master/middleware/filesystem) | FileSystem middleware for Fiber, special thanks and credits to Alireza Salary |
@@ -495,7 +496,10 @@ Here is a list of middleware that are included within the Fiber framework.
 | [limiter](https://github.com/gofiber/fiber/tree/master/middleware/limiter) | Rate-limiting middleware for Fiber. Use to limit repeated requests to public APIs and/or endpoints such as password reset. |
 | [logger](https://github.com/gofiber/fiber/tree/master/middleware/logger) | HTTP request/response logger. |
 | [pprof](https://github.com/gofiber/fiber/tree/master/middleware/pprof) | Special thanks to Matthew Lee \(@mthli\) |
+| [proxy](https://github.com/gofiber/fiber/tree/master/middleware/pprof) | Allows you to proxy requests to a multiple servers |
+| [requestid](https://github.com/gofiber/fiber/tree/master/middleware/requestid) | Adds a requestid to every request. |
 | [recover](https://github.com/gofiber/fiber/tree/master/middleware/recover) | Recover middleware recovers from panics anywhere in the stack chain and handles the control to the centralized[ ErrorHandler](error-handling.md). |
+| [timeout](https://github.com/gofiber/fiber/tree/master/middleware/timeout) | Adds a max time for a request and forwards to ErrorHandler if it is exceeded. |
 
 ## 🧬 External Middleware
 
@@ -526,6 +530,7 @@ List of externally hosted middleware modules and maintained by the [Fiber team](
 - [shareed2k/fiber_limiter](https://github.com/shareed2k/fiber_limiter)
 - [shareed2k/fiber_tracing](https://github.com/shareed2k/fiber_tracing)
 - [thomasvvugt/fiber-boilerplate](https://github.com/thomasvvugt/fiber-boilerplate)
+- [ansrivas/fiberprometheus](https://github.com/ansrivas/fiberprometheus)
 
 ## 👍 贡献
 
@@ -582,3 +587,6 @@ Copyright (c) 2019-present [Fenny](https://github.com/fenny) and [Contributors](
 - [colorable](https://github.com/mattn/go-colorable/blob/master/LICENSE)
 - [fasttemplate](https://github.com/valyala/fasttemplate/blob/master/LICENSE)
 - [bytebufferpool](https://github.com/valyala/bytebufferpool/blob/master/LICENSE)
+- [gopsutil](https://github.com/shirou/gopsutil/blob/master/LICENSE)
+- [go-ole](https://github.com/go-ole/go-ole)
+- [wmi](https://github.com/StackExchange/wmi)

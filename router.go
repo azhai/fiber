@@ -33,6 +33,8 @@ type Router interface {
 	All(path string, handlers ...Handler) Router
 
 	Group(prefix string, handlers ...Handler) Router
+
+	Mount(prefix string, fiber *App) Router
 }
 
 // Route is a struct that holds all metadata for each registered handler
@@ -118,12 +120,8 @@ func (app *App) next(c *Ctx) (match bool, err error) {
 
 		// Execute first handler of route
 		c.indexHandler = 0
-		if err = route.Handlers[0](c); err != nil {
-			if catch := c.app.config.ErrorHandler(c, err); catch != nil {
-				_ = c.SendStatus(StatusInternalServerError)
-			}
-		}
-		return // Stop scanning the stack
+		err = route.Handlers[0](c)
+		return match, err // Stop scanning the stack
 	}
 
 	// If c.Next() does not match, return 404
@@ -133,9 +131,7 @@ func (app *App) next(c *Ctx) (match bool, err error) {
 	// If no match, scan stack again if other methods match the request
 	// Moved from app.handler because middleware may break the route chain
 	if !c.matched && methodExist(c) {
-		if catch := c.app.config.ErrorHandler(c, ErrMethodNotAllowed); catch != nil {
-			_ = c.SendStatus(StatusInternalServerError)
-		}
+		err = ErrMethodNotAllowed
 	}
 	return
 }
@@ -152,7 +148,12 @@ func (app *App) handler(rctx *fasthttp.RequestCtx) {
 	}
 
 	// Find match in stack
-	match, _ := app.next(c)
+	match, err := app.next(c)
+	if err != nil {
+		if catch := c.app.config.ErrorHandler(c, err); catch != nil {
+			_ = c.SendStatus(StatusInternalServerError)
+		}
+	}
 	// Generate ETag if enabled
 	if match && app.config.ETag {
 		setETag(c, false)
@@ -274,8 +275,6 @@ func (app *App) register(method, pathRaw string, handlers ...Handler) Router {
 		// Add route to stack
 		app.addRoute(method, &route)
 	}
-	// Build router tree
-	app.buildTree()
 	return app
 }
 
@@ -326,7 +325,7 @@ func (app *App) registerStatic(prefix, root string, config ...Static) Router {
 			if len(path) >= prefixLen {
 				if isStar && getString(path[0:prefixLen]) == prefix {
 					path = append(path[0:0], '/')
-				} else {
+				} else if len(path) > 0 && path[len(path)-1] != '/' {
 					path = append(path[prefixLen:], '/')
 				}
 			}
@@ -384,8 +383,6 @@ func (app *App) registerStatic(prefix, root string, config ...Static) Router {
 	app.addRoute(MethodGet, &route)
 	// Add HEAD route
 	app.addRoute(MethodHead, &route)
-	// Build router tree
-	app.buildTree()
 	return app
 }
 
@@ -408,6 +405,8 @@ func (app *App) addRoute(method string, route *Route) {
 		// Add route to the stack
 		app.stack[m] = append(app.stack[m], route)
 	}
+	// Build router tree
+	app.buildTree()
 }
 
 // buildTree build the prefix tree from the previously registered routes

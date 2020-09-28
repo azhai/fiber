@@ -51,10 +51,7 @@ var ConfigDefault = Config{
 	ContextKey:  "csrf",
 	Cookie: &fiber.Cookie{
 		Name:     "_csrf",
-		Domain:   "",
-		Path:     "",
-		Secure:   false,
-		HTTPOnly: false,
+		SameSite: "Strict",
 	},
 	CookieExpires: 24 * time.Hour,
 }
@@ -77,6 +74,9 @@ func New(config ...Config) fiber.Handler {
 		}
 		if cfg.Cookie == nil {
 			cfg.Cookie = ConfigDefault.Cookie
+			if cfg.Cookie.Name == "" {
+				cfg.Cookie.Name = "_csrf"
+			}
 		}
 		if cfg.CookieExpires == 0 {
 			cfg.CookieExpires = ConfigDefault.CookieExpires
@@ -131,7 +131,7 @@ func New(config ...Config) fiber.Handler {
 				return fiber.ErrForbidden
 			}
 			// Some magic to compare both cookie and client csrf token
-			if subtle.ConstantTimeCompare(utils.GetBytes(token), utils.GetBytes(csrf)) != 1 {
+			if subtle.ConstantTimeCompare(utils.UnsafeBytes(token), utils.UnsafeBytes(csrf)) != 1 {
 				// Comparison failed, return forbidden
 				return fiber.ErrForbidden
 			}
@@ -146,6 +146,7 @@ func New(config ...Config) fiber.Handler {
 			Expires:  time.Now().Add(cfg.CookieExpires),
 			Secure:   cfg.Cookie.Secure,
 			HTTPOnly: cfg.Cookie.HTTPOnly,
+			SameSite: cfg.Cookie.SameSite,
 		}
 
 		// Set cookie to response

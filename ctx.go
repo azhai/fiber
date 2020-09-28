@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -496,7 +497,7 @@ func (c *Ctx) Is(extension string) bool {
 	}
 
 	return strings.HasPrefix(
-		utils.TrimLeft(utils.GetString(c.fasthttp.Request.Header.ContentType()), ' '),
+		utils.TrimLeft(utils.UnsafeString(c.fasthttp.Request.Header.ContentType()), ' '),
 		extensionHeader,
 	)
 }
@@ -599,17 +600,12 @@ func (c *Ctx) Next() (err error) {
 	// Did we executed all route handlers?
 	if c.indexHandler < len(c.route.Handlers) {
 		// Continue route stack
-		if err = c.route.Handlers[c.indexHandler](c); err != nil {
-			if err = c.app.config.ErrorHandler(c, err); err != nil {
-				_ = c.SendStatus(StatusInternalServerError)
-			}
-			return err
-		}
+		err = c.route.Handlers[c.indexHandler](c)
 	} else {
 		// Continue handler stack
 		_, err = c.app.next(c)
 	}
-	return
+	return err
 }
 
 // OriginalURL contains the original request URL.
@@ -708,10 +704,57 @@ func (c *Ctx) QueryParser(out interface{}) error {
 
 	data := make(map[string][]string)
 	c.fasthttp.QueryArgs().VisitAll(func(key []byte, val []byte) {
-		data[getString(key)] = append(data[getString(key)], getString(val))
+		k := utils.UnsafeString(key)
+		v := utils.UnsafeString(val)
+		if strings.Index(v, ",") > -1 && equalFieldType(out, reflect.Slice, k) {
+			values := strings.Split(v, ",")
+			for i := 0; i < len(values); i++ {
+				data[k] = append(data[k], values[i])
+			}
+		} else {
+			data[k] = append(data[k], v)
+		}
 	})
 
 	return decoder.Decode(out, data)
+}
+
+func equalFieldType(out interface{}, kind reflect.Kind, key string) bool {
+	// Get type of interface
+	outTyp := reflect.TypeOf(out).Elem()
+	// Must be a struct to match a field
+	if outTyp.Kind() != reflect.Struct {
+		return false
+	}
+	// Copy interface to an value to be used
+	outVal := reflect.ValueOf(out).Elem()
+	// Loop over each field
+	for i := 0; i < outTyp.NumField(); i++ {
+		// Get field value data
+		structField := outVal.Field(i)
+		// Can this field be changed?
+		if !structField.CanSet() {
+			continue
+		}
+		// Get field key data
+		typeField := outTyp.Field(i)
+		// Get type of field key
+		structFieldKind := structField.Kind()
+		// Does the field type equals input?
+		if structFieldKind != kind {
+			continue
+		}
+		// Get tag from field if exist
+		inputFieldName := typeField.Tag.Get(key)
+		if inputFieldName == "" {
+			inputFieldName = typeField.Name
+		}
+		// Compare field/tag with provided key
+		if utils.ToLower(inputFieldName) == key {
+			return true
+		}
+	}
+	return false
 }
 
 var (
@@ -877,7 +920,7 @@ func (c *Ctx) SendFile(file string, compress ...bool) error {
 	})
 
 	// Keep original path for mutable params
-	c.pathOriginal = utils.ImmutableString(c.pathOriginal)
+	c.pathOriginal = utils.SafeString(c.pathOriginal)
 	// Disable compression
 	if len(compress) <= 0 || !compress[0] {
 		// https://github.com/valyala/fasthttp/blob/master/fs.go#L46
@@ -952,7 +995,7 @@ func (c *Ctx) Set(key string, val string) {
 }
 
 func (c *Ctx) setCanonical(key string, val string) {
-	c.fasthttp.Response.Header.SetCanonical(utils.GetBytes(key), utils.GetBytes(val))
+	c.fasthttp.Response.Header.SetCanonical(utils.UnsafeBytes(key), utils.UnsafeBytes(val))
 }
 
 // Subdomains returns a string slice of subdomains in the domain name of the request.
@@ -1014,16 +1057,22 @@ func (c *Ctx) Vary(fields ...string) {
 	c.Append(HeaderVary, fields...)
 }
 
-// Write writes p into response body.
-func (c *Ctx) Write(p []byte) (n int, err error) {
+// Write appends p into response body.
+func (c *Ctx) Write(p []byte) (int, error) {
 	c.fasthttp.Response.AppendBody(p)
 	return len(p), nil
+}
+
+// WriteString appends s to response body.
+func (c *Ctx) WriteString(s string) (int, error) {
+	c.fasthttp.Response.AppendBodyString(s)
+	return len(s), nil
 }
 
 // XHR returns a Boolean property, that is true, if the request's X-Requested-With header field is XMLHttpRequest,
 // indicating that the request was issued by a client library (such as jQuery).
 func (c *Ctx) XHR() bool {
-	return utils.EqualsFold(utils.GetBytes(c.Get(HeaderXRequestedWith)), []byte("xmlhttprequest"))
+	return utils.EqualsFold(utils.UnsafeBytes(c.Get(HeaderXRequestedWith)), []byte("xmlhttprequest"))
 }
 
 // prettifyPath ...
